@@ -1,5 +1,6 @@
 import argparse
 import math
+import os
 import torch
 import torch.nn as nn
 
@@ -149,6 +150,10 @@ class FineTuneModel(Model):
 if __name__ == '__main__':
     argparser = FineTuneModel.get_model_specific_argparser()
     hparams = argparser.parse_args()
+
+    # Set environment variables before all else.
+    os.environ['CUDA_VISIBLE_DEVICES'] = hparams.gpus
+
     model = FineTuneModel(hparams)
     if hparams.train:
         model.run_training_sessions()

@@ -85,6 +85,7 @@ class Model(nn.Module):
             logger.log('Data parallel across %d GPUs: %s' %
                        (len(self.hparams.gpus.split(',')), self.hparams.gpus))
             self = nn.DataParallel(self)
+            self = self.module  # TODO: doesn't work, figure out
         self.to(self.device)
 
         gradient_clippers = self.configure_gradient_clippers()
@@ -137,6 +138,7 @@ class Model(nn.Module):
                             scheduler.step()
                         self.zero_grad()
 
+                    # TODO: not printing right
                     if (num_steps + 1) % self.hparams.check_interval == 0:
                         logger.log('Step {:10d}/{:d} | Epoch {:3d} | '
                                    'batch {:5d}/{:5d}'\
