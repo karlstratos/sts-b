@@ -44,12 +44,15 @@ class FineTuneModel(Model):
 
         if self.hparams.joint:  # Full transformer
             if self.hparams.use_projection:  # [x1|x2] -> score
-                self.projector = nn.Linear(self.dim_hidden, 1)
+                self.projector = nn.Sequential(nn.Dropout(self.hparams.drop),
+                                               nn.Linear(self.dim_hidden, 1))
                 self.projector.apply(get_init_transformer(self.encoder))
         else:  # Dual encoder
             self.encoder2 = deepcopy(self.encoder)
             if self.hparams.use_projection:  # [x1,x2,x1-x2,x1*x2] -> score
-                self.projector = nn.Linear(4 * self.dim_hidden, 1)
+                self.projector = nn.Sequential(
+                    nn.Dropout(self.hparams.drop),
+                    nn.Linear(4 * self.dim_hidden, 1))
                 self.projector.apply(get_init_transformer(self.encoder))
 
         self.loss = torch.nn.MSELoss()
@@ -100,7 +103,7 @@ class FineTuneModel(Model):
                 forward = self.forward(batch)
                 preds.extend(forward['preds'])
                 golds.extend(forward['golds'])
-        perf = pearsonr(preds, golds)[0]
+        perf = pearsonr(preds, golds)[0] * 100.
         self.train()
         return perf
 
@@ -114,12 +117,12 @@ class FineTuneModel(Model):
     def get_hparams_grid():
         # [*] following https://arxiv.org/pdf/1810.04805.pdf
         grid = OrderedDict({
-            'batch_size': [16, 32],  # [*]
-            'lr': [5e-5, 3e-5, 2e-5],  # [*]
-            'epochs': [2, 3, 4],  # [*]
-            'joint': [True, False],
+            'batch_size': [32],  # [*]
+            'lr': [5e-5, 4e-5, 3e-5, 2e-5],  # [*]
+            'epochs': [3],  # [*]
+            'joint': [True],
             'combine': ['avg', 'cls'],
-            'use_projection': [True, False],
+            'use_projection': [True],
             'seed': list(range(100000)),
             })
         return grid
@@ -142,6 +145,8 @@ class FineTuneModel(Model):
                             help='use projection?')
         parser.add_argument('--lr', type=float, default=3e-5,
                             help='initial learning rate [%(default)g]')
+        parser.add_argument('--drop', type=float, default=0.1,
+                            help='dropout rate [%(default)g]')
         parser.add_argument('--clip', type=float, default=1,
                             help='gradient clipping [%(default)g]')
 
