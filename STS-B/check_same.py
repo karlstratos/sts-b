@@ -27,7 +27,7 @@ def get_old_examples(fname):
 # Check train
 new_examples = get_new_examples('train.tsv')
 old_examples = get_old_examples('original/sts-train.tsv')
-nassert len(new_examples) == len(old_examples)
+assert len(new_examples) == len(old_examples)
 for i in range(len(new_examples)):
     assert new_examples[i] == old_examples[i]
 print('[TRAIN] passed: %d examples exactly the same' % len(new_examples))

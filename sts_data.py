@@ -44,7 +44,7 @@ class STSDataset(Dataset):
         self.path = path
         self.tokenizer = tokenizer
         self.joint = joint
-        self.examples = self.load_examples()
+        self.examples = read_sts_original_file(path)
 
     def __len__(self):
         return len(self.examples)
@@ -59,13 +59,14 @@ class STSDataset(Dataset):
             x2 = self.tokenizer.encode_plus(sent2)['input_ids']
             return torch.tensor(x1), torch.tensor(x2), torch.tensor([score])
 
-    def load_examples(self):
-        examples = []
-        with open(self.path) as f:
-            for line in f:
-                pieces = line.split('\t')
-                sent1 = pieces[5].strip()
-                sent2 = pieces[6].strip()
-                score = float(pieces[4])
-                examples.append((sent1, sent2, score))
-        return examples
+
+def read_sts_original_file(path):  # Ex. 'STS-B/original/sts-dev.tsv'
+    examples = []
+    with open(path) as f:
+        for line in f:
+            pieces = line.split('\t')
+            sent1 = pieces[5].strip()
+            sent2 = pieces[6].strip()
+            score = float(pieces[4])
+            examples.append((sent1, sent2, score))
+    return examples

@@ -153,8 +153,8 @@ class FineTuneModel(Model):
         return parser
 
 if __name__ == '__main__':
-    argparser = FineTuneModel.get_model_specific_argparser()
-    hparams = argparser.parse_args()
+    parser = FineTuneModel.get_model_specific_argparser()
+    hparams = parser.parse_args()
 
     # Set environment variables before all else.
     os.environ['CUDA_VISIBLE_DEVICES'] = hparams.gpus
