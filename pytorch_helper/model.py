@@ -250,9 +250,9 @@ class Model(nn.Module):
         parser.add_argument('--model_path', type=str, default='/tmp/model')
         parser.add_argument('--train', action='store_true',
                             help='train a model?')
-        parser.add_argument('--batch_size', type=int, default=16,
+        parser.add_argument('--batch_size', type=int, default=32,
                             help='batch size [%(default)d]')
-        parser.add_argument('--test_batch_size', type=int, default=64,
+        parser.add_argument('--test_batch_size', type=int, default=32,
                             help='test batch size [%(default)d]')
         parser.add_argument('--epochs', type=int, default=40,
                             help='max number of epochs [%(default)d]')
