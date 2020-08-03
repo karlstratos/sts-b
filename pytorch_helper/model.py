@@ -231,6 +231,8 @@ class Model(nn.Module):
         flags = ''
         for hparam in vars(self.hparams):
             val = getattr(self.hparams, hparam)
+            if not val:
+                continue
             if str(val) == 'False':
                 continue
             elif str(val) == 'True':
