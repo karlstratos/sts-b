@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+import pickle
 import torch
 import torch.nn as nn
 
@@ -33,13 +34,17 @@ class FineTuneModel(Model):
             raise ValueError
         return tokenizer
 
-    def define_parameters(self):
+    def get_encoder(self):
         if self.hparams.model_type == 'bert':
-            self.encoder = BertModel.from_pretrained('bert-base-uncased')
+            encoder = BertModel.from_pretrained('bert-base-uncased')
         elif self.hparams.model_type == 'roberta':
-            self.encoder = RobertaModel.from_pretrained('roberta-base')
+            encoder = RobertaModel.from_pretrained('roberta-base')
         else:
             raise ValueError
+        return encoder
+
+    def define_parameters(self):
+        self.encoder = self.get_encoder()
         self.dim_hidden = self.encoder.config.hidden_size
 
         if self.hparams.joint:  # Full transformer
@@ -136,6 +141,9 @@ class FineTuneModel(Model):
         parser.add_argument('--model_type', type=str, default='bert',
                             choices=['bert', 'roberta'],
                             help='model type [%(default)s]')
+        parser.add_argument('--dump_path', type=str, default='',
+                            help='dump encoder output here and exit if '
+                            'specified [%(default)s]')
         parser.add_argument('--joint', action='store_true',
                             help='joint input?')
         parser.add_argument('--combine', type=str, default='avg',
@@ -152,6 +160,38 @@ class FineTuneModel(Model):
 
         return parser
 
+    def dump(self, dump_path):
+        self.eval()
+        encoder = self.get_encoder()
+        encoder.to(self.device)
+
+        assert not self.hparams.joint  # Encode sentences separately.
+        self.load_data()
+        loader_train, loader_val, loader_test \
+            = self.data.get_loaders(self.hparams.test_batch_size,
+                                    shuffle_train=False,
+                                    num_workers=self.hparams.num_workers,
+                                    get_test=True)
+        def get_hiddens(loader):
+            with torch.no_grad():
+                hiddens1 = []
+                hiddens2 = []
+                scores = []
+                for batch in loader:
+                    X1 = batch[0].to(self.device)
+                    X2 = batch[1].to(self.device)
+                    Y = batch[2].to(self.device)
+                    hiddens1 += encoder(X1)[0].tolist()  # (B x T x d)
+                    hiddens2 += encoder(X2)[0].tolist()  # (B x T x d)
+                    scores += Y.tolist()  # (B)
+            return (hiddens1, hiddens2, scores)
+
+        encoding = {'train': get_hiddens(loader_train),
+                    'val': get_hiddens(loader_val),
+                    'test': get_hiddens(loader_test)}
+        pickle.dump(encoding, open(dump_path, 'wb'))
+
+
 if __name__ == '__main__':
     parser = FineTuneModel.get_model_specific_argparser()
     hparams = parser.parse_args()
@@ -160,6 +200,10 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = hparams.gpus
 
     model = FineTuneModel(hparams)
+    if hparams.dump_path:
+        model.dump(hparams.dump_path)
+        exit()
+
     if hparams.train:
         model.run_training_sessions()
     else:
