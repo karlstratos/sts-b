@@ -3,7 +3,7 @@ import os
 import pickle
 import torch
 
-from helper.data import Data
+from pytorch_helper.data import Data
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, TensorDataset
 
@@ -58,6 +58,42 @@ class STSDataset(Dataset):
             x1 = self.tokenizer.encode_plus(sent1)['input_ids']
             x2 = self.tokenizer.encode_plus(sent2)['input_ids']
             return torch.tensor(x1), torch.tensor(x2), torch.tensor([score])
+
+
+class FrozenData(Data):
+
+    def __init__(self, dump_path):
+        super().__init__()
+        self.dump_path = dump_path
+        self.load_datasets()
+
+    def load_datasets(self):
+        encoding = pickle.load(open(self.dump_path, 'rb'))
+        self.dim_hidden = len(encoding['train'][0][0][0])
+
+        self.dataset_train = FrozenDataset(encoding['train'])
+        self.dataset_val = FrozenDataset(encoding['val'])
+        self.dataset_test = FrozenDataset(encoding['test'])
+
+    def custom_collate_fn(self, batch):
+        x1s, x2s, ys = zip(*batch)
+        return (pad_sequence(x1s, batch_first=True),  # B x T
+                pad_sequence(x2s, batch_first=True),  # B x T'
+                torch.cat(ys, dim=0))  # B
+
+
+class FrozenDataset(Dataset):
+    def __init__(self, examples):  # (hiddens1, hiddens2, scores)
+        self.examples = examples
+
+    def __len__(self):
+        return len(self.examples[0])
+
+    def __getitem__(self, index):
+        x1 = self.examples[0][index]
+        x2 = self.examples[1][index]
+        score = self.examples[2][index]
+        return torch.tensor(x1), torch.tensor(x2), torch.tensor([score])
 
 
 def read_sts_original_file(path):  # Ex. 'STS-B/original/sts-dev.tsv'

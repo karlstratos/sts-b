@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from copy import deepcopy
 from datetime import timedelta
-from helper.logger import Logger
+from pytorch_helper.logger import Logger
 from timeit import default_timer as timer
 
 
@@ -75,6 +75,7 @@ class Model(nn.Module):
         random.seed(self.hparams.seed)
         torch.manual_seed(self.hparams.seed)
 
+        self.load_data()
         self.define_parameters()
         if self.hparams.verbose:
             logger.log(str(self))
@@ -91,7 +92,6 @@ class Model(nn.Module):
         gradient_clippers = self.configure_gradient_clippers()
         optimizers, schedulers = self.configure_optimizers()
 
-        self.load_data()
         loader_train, loader_val, _ = self.data.get_loaders(
             self.hparams.batch_size, shuffle_train=True,
             num_workers=self.hparams.num_workers, get_test=False)

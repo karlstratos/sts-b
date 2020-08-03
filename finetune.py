@@ -7,10 +7,10 @@ import torch.nn as nn
 
 from collections import OrderedDict
 from copy import deepcopy
-from helper.model import Model
-from helper.util import get_init_transformer
+from pytorch_helper.model import Model
+from pytorch_helper.util import get_init_transformer
 from scipy.stats import pearsonr, spearmanr
-from sts_data import STSData
+from data import STSData
 from transformers import BertTokenizer, BertModel, RobertaTokenizer, \
     RobertaModel
 
@@ -172,7 +172,7 @@ class FineTuneModel(Model):
                                     shuffle_train=False,
                                     num_workers=self.hparams.num_workers,
                                     get_test=True)
-        def get_hiddens(loader):
+        def encode_data(loader):
             with torch.no_grad():
                 hiddens1 = []
                 hiddens2 = []
@@ -186,9 +186,9 @@ class FineTuneModel(Model):
                     scores += Y.tolist()  # (B)
             return (hiddens1, hiddens2, scores)
 
-        encoding = {'train': get_hiddens(loader_train),
-                    'val': get_hiddens(loader_val),
-                    'test': get_hiddens(loader_test)}
+        encoding = {'train': encode_data(loader_train),
+                    'val': encode_data(loader_val),
+                    'test': encode_data(loader_test)}
         pickle.dump(encoding, open(dump_path, 'wb'))
 
 
