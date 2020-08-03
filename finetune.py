@@ -12,7 +12,8 @@ from pytorch_helper.util import get_init_transformer
 from scipy.stats import pearsonr, spearmanr
 from data import STSData
 from transformers import BertTokenizer, BertModel, RobertaTokenizer, \
-    RobertaModel
+    RobertaModel, AlbertTokenizer, AlbertModel, DistilBertTokenizer, \
+    DistilBertModel
 
 
 class FineTuneModel(Model):
@@ -30,8 +31,19 @@ class FineTuneModel(Model):
             tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         elif self.hparams.model_type == 'bert-cased':
             tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+        elif self.hparams.model_type == 'bert-large':
+            tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
+        elif self.hparams.model_type == 'distilbert':
+            tokenizer = DistilBertTokenizer.from_pretrained(
+                'distilbert-base-uncased')
         elif self.hparams.model_type == 'roberta':
             tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+        elif self.hparams.model_type == 'roberta-large':
+            tokenizer = RobertaTokenizer.from_pretrained('roberta-large')
+        elif self.hparams.model_type == 'albert':
+            tokenizer = AlbertTokenizer.from_pretrained('albert-base-v2')
+        elif self.hparams.model_type == 'albert-xxlarge':
+            tokenizer = AlbertTokenizer.from_pretrained('albert-xxlarge-v2')
         else:
             raise ValueError
         return tokenizer
@@ -41,8 +53,18 @@ class FineTuneModel(Model):
             encoder = BertModel.from_pretrained('bert-base-uncased')
         elif self.hparams.model_type == 'bert-cased':
             encoder = BertModel.from_pretrained('bert-base-cased')
+        elif self.hparams.model_type == 'bert-large':
+            encoder = BertModel.from_pretrained('bert-large-uncased')
+        elif self.hparams.model_type == 'distilbert':
+            encoder = DistilBertModel.from_pretrained('distilbert-base-uncased')
         elif self.hparams.model_type == 'roberta':
             encoder = RobertaModel.from_pretrained('roberta-base')
+        elif self.hparams.model_type == 'roberta-large':
+            encoder = RobertaModel.from_pretrained('roberta-large')
+        elif self.hparams.model_type == 'albert':
+            encoder = AlbertModel.from_pretrained('albert-base-v2')
+        elif self.hparams.model_type == 'albert-xxlarge':
+            encoder = AlbertModel.from_pretrained('albert-xxlarge-v2')
         else:
             raise ValueError
         return encoder
@@ -94,11 +116,11 @@ class FineTuneModel(Model):
         return {'loss': loss, 'preds': preds.tolist(), 'golds': Y.tolist()}
 
     def reduce_sequence(self, encoder_outputs):
-        hiddens, cls = encoder_outputs  # (B x T x d), (B x d)
+        hiddens = encoder_outputs[0]  # (B x T x d)
         if self.hparams.combine == 'cls':  # [CLS] for BERT, <s> for RoBERTa
-            embs = cls
+            embs = hiddens[:,0,:]  # (B x d)
         elif self.hparams.combine == 'avg':
-            embs = hiddens.mean(dim=1)
+            embs = hiddens.mean(dim=1)  # (B x d)
         else:
             raise ValueError
         return embs  # B x d
@@ -143,7 +165,9 @@ class FineTuneModel(Model):
         parser.add_argument('--data_path', type=str, default='STS-B',
                             help='path to STS-B folder from GLUE [%(default)s]')
         parser.add_argument('--model_type', type=str, default='bert',
-                            choices=['bert', 'bert-cased', 'roberta'],
+                            choices=['bert', 'bert-cased', 'bert-large',
+                                     'distilbert', 'roberta', 'roberta-large',
+                                     'albert', 'albert-xxlarge'],
                             help='model type [%(default)s]')
         parser.add_argument('--dump_path', type=str, default='',
                             help='dump encoder output here and exit if '
