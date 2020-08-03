@@ -25,6 +25,35 @@ class Sent2vecEvaluator:
         self.model = sent2vec.Sent2vecModel()
         self.model.load_model(hparams.model)
 
+        if hparams.dim_subspace > 0:
+            self.get_projection()
+
+    def get_projection(self):
+        examples = self.examples_train if self.hparams.project_train else \
+                   self.examples_val
+        embs = []
+        for sent1, sent2, score in examples:
+            text1 = self.prepare_text(sent1)
+            text2 = self.prepare_text(sent2)
+            emb1 = np.squeeze(self.model.embed_sentence(text1))
+            emb2 = np.squeeze(self.model.embed_sentence(text2))
+            embs.append(emb1)
+            embs.append(emb2)
+
+        X = np.column_stack(embs)  # d x 2*num_pairs
+
+        if self.hparams.pca:
+            self.mu = np.mean(X, axis=1)
+            X -= np.expand_dims(self.mu, axis=1)
+
+        print('SVD on %d x %d data matrix, removing top-%d subspace from %s '
+              'sentence embs' %
+              (X.shape[0], X.shape[1], self.hparams.dim_subspace,
+               'train' if self.hparams.project_train else 'val'))
+        U, S, Vt = np.linalg.svd(X)
+        U = U[:,:self.hparams.dim_subspace]
+        self.P = np.matmul(U, U.transpose())
+
     def run(self):
         p_train, s_train = self.evaluate(self.examples_train)
         p_val, s_val = self.evaluate(self.examples_val)
@@ -41,6 +70,14 @@ class Sent2vecEvaluator:
             text2 = self.prepare_text(sent2)
             emb1 = np.squeeze(self.model.embed_sentence(text1))
             emb2 = np.squeeze(self.model.embed_sentence(text2))
+
+            if self.hparams.dim_subspace > 0:
+                if self.hparams.pca:
+                    emb1 -= self.mu
+                    emb2 -= self.mu
+                emb1 -= self.P.dot(emb1)
+                emb2 -= self.P.dot(emb2)
+
             preds.append(cos_numpy(emb1, emb2))
             golds.append(score)
         preds = np.array(preds)
@@ -122,6 +159,12 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str,  # (or wiki_unigrams.bin)
                         default='../sent2vec/twitter_unigrams.bin',
                         help='sent2vec model [%(default)s]')
+    parser.add_argument('--project_train', action='store_true',
+                        help='get projection from training data?')
+    parser.add_argument('--pca', action='store_true',
+                        help='do PCA instead of just best-fit subspace?')
+    parser.add_argument('--dim_subspace', type=int, default=0,
+                        help='best-fit subspace dimension [%(default)d]')
     hparams = parser.parse_args()
 
     evaluator = Sent2vecEvaluator(hparams)
