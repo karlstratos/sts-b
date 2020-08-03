@@ -61,8 +61,8 @@ class Model(nn.Module):
             logger.log('best hparams: ' + self.flag_hparams())
 
         val_perf, test_perf = self.final_test()
-        logger.log('Val:  {:8.2f}'.format(val_perf))
-        logger.log('Test: {:8.2f}'.format(test_perf))
+        logger.log('Val:  {:8.1f}'.format(val_perf))
+        logger.log('Test: {:8.1f}'.format(test_perf))
 
     def run_training_session(self, run_num, logger):
         self.train()
