@@ -28,6 +28,8 @@ class FineTuneModel(Model):
     def get_tokenizer(self):
         if self.hparams.model_type == 'bert':
             tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        elif self.hparams.model_type == 'bert-cased':
+            tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
         elif self.hparams.model_type == 'roberta':
             tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
         else:
@@ -37,6 +39,8 @@ class FineTuneModel(Model):
     def get_encoder(self):
         if self.hparams.model_type == 'bert':
             encoder = BertModel.from_pretrained('bert-base-uncased')
+        elif self.hparams.model_type == 'bert-cased':
+            encoder = BertModel.from_pretrained('bert-base-cased')
         elif self.hparams.model_type == 'roberta':
             encoder = RobertaModel.from_pretrained('roberta-base')
         else:
@@ -120,11 +124,11 @@ class FineTuneModel(Model):
 
     @staticmethod
     def get_hparams_grid():
-        # [*] following https://arxiv.org/pdf/1810.04805.pdf
+        # [*] mostly following https://arxiv.org/pdf/1810.04805.pdf
         grid = OrderedDict({
             'batch_size': [32],  # [*]
             'lr': [5e-5, 4e-5, 3e-5, 2e-5],  # [*]
-            'epochs': [3],  # [*]
+            'epochs': [4],  # [*]
             'joint': [True],
             'combine': ['avg', 'cls'],
             'use_projection': [True],
@@ -139,7 +143,7 @@ class FineTuneModel(Model):
         parser.add_argument('--data_path', type=str, default='STS-B',
                             help='path to STS-B folder from GLUE [%(default)s]')
         parser.add_argument('--model_type', type=str, default='bert',
-                            choices=['bert', 'roberta'],
+                            choices=['bert', 'bert-cased', 'roberta'],
                             help='model type [%(default)s]')
         parser.add_argument('--dump_path', type=str, default='',
                             help='dump encoder output here and exit if '
@@ -211,5 +215,5 @@ if __name__ == '__main__':
         print('Loaded model with: %s' % model.flag_hparams())
 
         val_perf, test_perf = model.final_test()
-        print('Val:  {:8.2f}'.format(val_perf))
-        print('Test: {:8.2f}'.format(test_perf))
+        print('Val:  {:8.1f}'.format(val_perf))
+        print('Test: {:8.1f}'.format(test_perf))

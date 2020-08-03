@@ -148,7 +148,7 @@ class Model(nn.Module):
                                    .format(num_steps, num_train_steps, epoch,
                                            batch_num + 1, len(loader_train)),
                                    False)
-                        logger.log(' '.join([' | {:s} {:8.2f}'.format(
+                        logger.log(' '.join([' | {:s} {:8.1f}'.format(
                             key, forward_sum[key] / num_steps)
                                              for key in forward_sum]))
 
@@ -158,10 +158,10 @@ class Model(nn.Module):
 
                 val_perf = self.evaluate(loader_val)
                 logger.log('End of epoch {:3d}'.format(epoch), False)
-                logger.log(' '.join([' | {:s} {:8.2f}'.format(
+                logger.log(' '.join([' | {:s} {:8.1f}'.format(
                     key, forward_sum[key] / num_steps)
                                      for key in forward_sum]), False)
-                logger.log(' | val perf {:8.2f}'.format(val_perf), False)
+                logger.log(' | val perf {:8.1f}'.format(val_perf), False)
 
                 if val_perf > best_val_perf:
                     best_val_perf = val_perf
