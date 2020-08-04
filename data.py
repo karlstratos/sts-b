@@ -83,16 +83,14 @@ class FrozenData(Data):
 
 
 class FrozenDataset(Dataset):
-    def __init__(self, examples):  # (hiddens1, hiddens2, scores)
+    def __init__(self, examples):
         self.examples = examples
 
     def __len__(self):
         return len(self.examples[0])
 
     def __getitem__(self, index):
-        x1 = self.examples[0][index]
-        x2 = self.examples[1][index]
-        score = self.examples[2][index]
+        x1, x2, score = self.examples[index]
         return torch.tensor(x1), torch.tensor(x2), torch.tensor([score])
 
 

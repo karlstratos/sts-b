@@ -10,10 +10,10 @@ import torch
 import torch.nn as nn
 
 from collections import OrderedDict
+from data import FrozenData
 from pytorch_helper.model import Model
 from pytorch_helper.util import get_init_uniform
 from scipy.stats import pearsonr, spearmanr
-from data import FrozenData
 
 
 class FrozenModel(Model):

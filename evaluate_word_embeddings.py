@@ -1,10 +1,14 @@
-# python evaluate_word_embeddings.py ../../data/word_representations/glove.840B.300d.txt
-# python evaluate_word_embeddings.py ../../data/word_representations/wiki.en.vec --lowercase --ignore_line1
-# python evaluate_word_embeddings.py ../../data/word_representations/glove.840B.300d.txt --dim_subspace 17 --freq ../../data/rcv1/vocab_rcv1.txt  --pca
+# python evaluate_word_embeddings.py  --dump_path scratch/dump_word_embeddings_random --dim_random 300
+# python evaluate_word_embeddings.py --word_embeddings ../../data/word_representations/glove.840B.300d.txt --dump_path scratch/dump_word_embeddings_glove
+# python evaluate_word_embeddings.py  --dim_subspace 17 --freq ../../data/rcv1/vocab_rcv1.txt  --pca
+# python evaluate_word_embeddings.py --word_embeddings ../../data/word_representations/glove.840B.300d.txt
+# python evaluate_word_embeddings.py --word_embeddings ../../data/word_representations/wiki.en.vec --lowercase --ignore_line1
+# python evaluate_word_embeddings.py --word_embeddings ../../data/word_representations/glove.840B.300d.txt --dim_subspace 17 --freq ../../data/rcv1/vocab_rcv1.txt  --pca
 
 import argparse
 import numpy as np
 import os
+import pickle
 
 from collections import Counter
 from nltk import word_tokenize
@@ -17,7 +21,10 @@ class WordEmbeddingEvaluator:
     def __init__(self, hparams):
         self.hparams = hparams
         self.load_sts_data()
-        self.load_word_embeddings()
+        if hparams.word_embeddings:
+            self.load_word_embeddings()
+        else:
+            self.init_random_word_embeddings()
 
         if hparams.freq:
             self.get_word_prob()
@@ -46,9 +53,9 @@ class WordEmbeddingEvaluator:
         embs = []
         for (toks1, toks2, _) in examples:
             emb1 = self.get_rep(toks1)
+            emb2 = self.get_rep(toks2)
             if isinstance(emb1, np.ndarray):
                 embs.append(emb1)
-            emb2 = self.get_rep(toks2)
             if isinstance(emb2, np.ndarray):
                 embs.append(emb2)
 
@@ -104,6 +111,27 @@ class WordEmbeddingEvaluator:
         p = pearsonr(preds, golds)[0] * 100. if len(preds) > 0 else None
         s = spearmanr(preds, golds)[0] * 100. if len(preds) > 0 else None
         return p, s, len(preds)
+
+    def dump(self, dump_path):
+        def encode_data(examples):
+            hiddens1 = []
+            hiddens2 = []
+            scores = []
+            for toks1, toks2, score in examples:
+                embs1 = [self.wemb[tok].tolist() for tok in toks1
+                         if tok in self.wemb]
+                embs2 = [self.wemb[tok].tolist() for tok in toks2
+                         if tok in self.wemb]
+                assert embs1 and embs2  # Disallow skipping
+                hiddens1.append(embs1)
+                hiddens2.append(embs2)
+                scores.append(score)
+            return list(zip(hiddens1, hiddens2, scores))
+
+        encoding = {'train': encode_data(self.examples_train),
+                    'val': encode_data(self.examples_val),
+                    'test': encode_data(self.examples_test)}
+        pickle.dump(encoding, open(dump_path, 'wb'))
 
     def weight(self, tok):
         if not self.hparams.freq:
@@ -172,13 +200,26 @@ class WordEmbeddingEvaluator:
                     print('Skipping weird line: %s...' % line[:100])
                     continue
 
+    def init_random_word_embeddings(self):
+        self.wemb = {}
+        self.dim = self.hparams.dim_random
+        np.random.seed(42)
+        for word in self.vocab:
+            self.wemb[word] = np.random.normal(size=(self.hparams.dim_random))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('word_embeddings', type=str,
-                        help='word embeddings file')
+    parser.add_argument('--word_embeddings', type=str, default='',
+                        help='word embeddings file, use random if empty '
+                        '[%(default)s]')
+    parser.add_argument('--dim_random', type=int, default=300,
+                        help='dim random word embeddings [%(default)d]')
     parser.add_argument('--lowercase', action='store_true',
                         help='lowercase?')
+    parser.add_argument('--dump_path', type=str, default='',
+                        help='dump STS data in word embeddings here and exit '
+                        'if specified [%(default)s]')
     parser.add_argument('--ignore_line1', action='store_true',
                         help='ignore the first line in the embeddings file?')
     parser.add_argument('--project_train', action='store_true',
@@ -204,6 +245,10 @@ if __name__ == '__main__':
         print('%d/%d words covered in word frequency file' % (
             len([word for word in evaluator.vocab if word in
                  evaluator.word_prob]), len(evaluator.vocab)))
+
+    if hparams.dump_path:
+        evaluator.dump(hparams.dump_path)
+        exit()
 
     run = evaluator.run()
     print('  train: {:4.1f}/{:4.1f} ({:d}/{:d} evaluated)'.format(

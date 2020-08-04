@@ -224,7 +224,7 @@ class FineTuneModel(Model):
                     hiddens1 += encoder(X1)[0].tolist()  # (B x T x d)
                     hiddens2 += encoder(X2)[0].tolist()  # (B x T x d)
                     scores += Y.tolist()  # (B)
-            return (hiddens1, hiddens2, scores)
+            return list(zip(hiddens1, hiddens2, scores))
 
         encoding = {'train': encode_data(loader_train),
                     'val': encode_data(loader_val),
