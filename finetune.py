@@ -13,7 +13,7 @@ from scipy.stats import pearsonr, spearmanr
 from data import STSData
 from transformers import BertTokenizer, BertModel, RobertaTokenizer, \
     RobertaModel, AlbertTokenizer, AlbertModel, DistilBertTokenizer, \
-    DistilBertModel
+    DistilBertModel, ElectraTokenizer, ElectraModel
 
 
 class FineTuneModel(Model):
@@ -44,6 +44,12 @@ class FineTuneModel(Model):
             tokenizer = AlbertTokenizer.from_pretrained('albert-base-v2')
         elif self.hparams.model_type == 'albert-xxlarge':
             tokenizer = AlbertTokenizer.from_pretrained('albert-xxlarge-v2')
+        elif self.hparams.model_type == 'electra':
+            tokenizer = ElectraTokenizer.from_pretrained(
+                'google/electra-base-discriminator')
+        elif self.hparams.model_type == 'electra-large':
+            tokenizer = ElectraTokenizer.from_pretrained(
+                'google/electra-large-discriminator')
         else:
             raise ValueError
         return tokenizer
@@ -65,6 +71,12 @@ class FineTuneModel(Model):
             encoder = AlbertModel.from_pretrained('albert-base-v2')
         elif self.hparams.model_type == 'albert-xxlarge':
             encoder = AlbertModel.from_pretrained('albert-xxlarge-v2')
+        elif self.hparams.model_type == 'electra':
+            encoder = ElectraModel.from_pretrained(
+                'google/electra-base-discriminator')
+        elif self.hparams.model_type == 'electra-large':
+            encoder = ElectraModel.from_pretrained(
+                'google/electra-large-discriminator')
         else:
             raise ValueError
         return encoder
@@ -166,7 +178,8 @@ class FineTuneModel(Model):
         parser.add_argument('--model_type', type=str, default='bert',
                             choices=['bert', 'bert-cased', 'bert-large',
                                      'distilbert', 'roberta', 'roberta-large',
-                                     'albert', 'albert-xxlarge'],
+                                     'albert', 'albert-xxlarge', 'electra',
+                                     'electra-large'],
                             help='model type [%(default)s]')
         parser.add_argument('--dump_path', type=str, default='',
                             help='dump encoder output here and exit if '
