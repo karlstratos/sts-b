@@ -224,6 +224,8 @@ class FineTuneModel(Model):
                 for X1, X2, L1, L2, A1, A2, Y in loader:
                     X1 = X1.to(self.device)
                     X2 = X2.to(self.device)
+                    A1 = A1.to(self.device)
+                    A2 = A2.to(self.device)
                     vectors1 = encoder(X1, attention_mask=A1)[0].tolist()
                     vectors2 = encoder(X2, attention_mask=A2)[0].tolist()
                     for i in range(len(vectors1)):  # Skip padding!
