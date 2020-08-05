@@ -103,10 +103,10 @@ if __name__ == '__main__':
     run = evaluator.run()
     print('  train: {:4.1f}/{:4.1f} ({:d}/{:d} evaluated)'.format(
         run.p_train, run.s_train, run.num_preds_train,
-        len(evaluator.encoding['train'][0])))
+        len(evaluator.encoding['train'])))
     print('  val:   {:4.1f}/{:4.1f} ({:d}/{:d} evaluated)'.format(
         run.p_val, run.s_val, run.num_preds_val,
-        len(evaluator.encoding['val'][0])))
+        len(evaluator.encoding['val'])))
     print('  test:  {:4.1f}/{:4.1f} ({:d}/{:d} evaluated)'.format(
         run.p_test, run.s_test, run.num_preds_test,
-        len(evaluator.encoding['test'][0])))
+        len(evaluator.encoding['test'])))

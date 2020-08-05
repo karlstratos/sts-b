@@ -221,9 +221,16 @@ class FineTuneModel(Model):
                     X1 = batch[0].to(self.device)
                     X2 = batch[1].to(self.device)
                     Y = batch[2].to(self.device)
-                    hiddens1 += encoder(X1)[0].tolist()  # (B x T x d)
-                    hiddens2 += encoder(X2)[0].tolist()  # (B x T x d)
-                    scores += Y.tolist()  # (B)
+                    vectors1 = encoder(X1)[0].tolist()
+                    vectors2 = encoder(X2)[0].tolist()
+                    for i in range(len(vectors1)):  # Skip padding!
+                        hiddens1.append(
+                            [vectors1[i][j] for j in range(len(vectors1[i]))
+                             if X1[i, j] != self.tokenizer.pad_token_id])
+                        hiddens2.append(
+                            [vectors2[i][j] for j in range(len(vectors2[i]))
+                             if X2[i, j] != self.tokenizer.pad_token_id])
+                        scores.append(Y[i].item())
             return list(zip(hiddens1, hiddens2, scores))
 
         encoding = {'train': encode_data(loader_train),

@@ -30,12 +30,15 @@ class STSData(Data):
     def custom_collate_fn(self, batch):
         if self.joint:
             xs, ys = zip(*batch)
-            return (pad_sequence(xs, batch_first=True),  # B x T
+            return (pad_sequence(xs, batch_first=True,  # B x T
+                                 padding_value=self.tokenizer.pad_token_id),
                     torch.cat(ys, dim=0))  # B
         else:
             x1s, x2s, ys = zip(*batch)
-            return (pad_sequence(x1s, batch_first=True),  # B x T
-                    pad_sequence(x2s, batch_first=True),  # B x T'
+            return (pad_sequence(x1s, batch_first=True,  # B x T
+                                 padding_value=self.tokenizer.pad_token_id),
+                    pad_sequence(x2s, batch_first=True,  # B x T'
+                                 padding_value=self.tokenizer.pad_token_id),
                     torch.cat(ys, dim=0))  # B
 
 
@@ -62,9 +65,10 @@ class STSDataset(Dataset):
 
 class FrozenData(Data):
 
-    def __init__(self, dump_path):
+    def __init__(self, dump_path, padding_value=0):
         super().__init__()
         self.dump_path = dump_path
+        self.padding_value = padding_value
         self.load_datasets()
 
     def load_datasets(self):
@@ -77,8 +81,10 @@ class FrozenData(Data):
 
     def custom_collate_fn(self, batch):
         x1s, x2s, ys = zip(*batch)
-        return (pad_sequence(x1s, batch_first=True),  # B x T
-                pad_sequence(x2s, batch_first=True),  # B x T'
+        return (pad_sequence(x1s, batch_first=True,  # B x T
+                             padding_value=self.padding_value),
+                pad_sequence(x2s, batch_first=True,  # B x T'
+                             padding_value=self.padding_value),
                 torch.cat(ys, dim=0))  # B
 
 
