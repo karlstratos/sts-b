@@ -1,3 +1,4 @@
+nltk>=3.5
 numpy
 scipy
 torch>=1.2

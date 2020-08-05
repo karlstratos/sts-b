@@ -29,17 +29,33 @@ class STSData(Data):
 
     def custom_collate_fn(self, batch):
         if self.joint:
-            xs, ys = zip(*batch)
-            return (pad_sequence(xs, batch_first=True,  # B x T
-                                 padding_value=self.tokenizer.pad_token_id),
-                    torch.cat(ys, dim=0))  # B
+            xs, ts, ys = zip(*batch)
+            X = pad_sequence(xs, batch_first=True,  # B x T
+                             padding_value=self.tokenizer.pad_token_id)
+            L = torch.LongTensor([len(x) for x in xs])  # B
+            T = torch.zeros(X.size())  # B x T
+            A = torch.zeros(X.size())  # B x T
+            for i in range(X.size(0)):
+                T[i][:L[i]] = ts[i]  # Type ID of trailing padding assumed zero
+                A[i][:L[i]] = torch.ones(L[i])
+            Y = torch.cat(ys, dim=0)  # B
+            return X, L, T.long(), A, Y
+
         else:
             x1s, x2s, ys = zip(*batch)
-            return (pad_sequence(x1s, batch_first=True,  # B x T
-                                 padding_value=self.tokenizer.pad_token_id),
-                    pad_sequence(x2s, batch_first=True,  # B x T'
-                                 padding_value=self.tokenizer.pad_token_id),
-                    torch.cat(ys, dim=0))  # B
+            X1 = pad_sequence(x1s, batch_first=True,  # B x T
+                              padding_value=self.tokenizer.pad_token_id)
+            X2 = pad_sequence(x2s, batch_first=True,  # B x T'
+                              padding_value=self.tokenizer.pad_token_id)
+            L1 = torch.LongTensor([len(x) for x in x1s])  # B
+            L2 = torch.LongTensor([len(x) for x in x2s])  # B
+            A1 = torch.zeros(X1.size())  # B x T
+            A2 = torch.zeros(X2.size())  # B x T'
+            for i in range(X1.size(0)):
+                A1[i][:L1[i]] = torch.ones(L1[i])
+                A2[i][:L2[i]] = torch.ones(L2[i])
+            Y = torch.cat(ys, dim=0)  # B
+            return X1, X2, L1, L2, A1, A2, Y
 
 
 class STSDataset(Dataset):
@@ -54,13 +70,19 @@ class STSDataset(Dataset):
 
     def __getitem__(self, index):
         sent1, sent2, score = self.examples[index]
+        y = torch.tensor([score])
         if self.joint:
-            x = self.tokenizer.encode_plus(sent1, sent2)['input_ids']
-            return torch.tensor(x), torch.tensor([score])
+            encoded_dict = self.tokenizer.encode_plus(
+                sent1, sent2, return_token_type_ids=True)
+            input_ids = torch.tensor(encoded_dict['input_ids'])
+            token_type_ids = torch.tensor(encoded_dict['token_type_ids'])
+            return input_ids, token_type_ids, y
         else:
-            x1 = self.tokenizer.encode_plus(sent1)['input_ids']
-            x2 = self.tokenizer.encode_plus(sent2)['input_ids']
-            return torch.tensor(x1), torch.tensor(x2), torch.tensor([score])
+            encoded_dict1 = self.tokenizer.encode_plus(sent1)
+            encoded_dict2 = self.tokenizer.encode_plus(sent2)
+            input_ids1 = torch.tensor(encoded_dict1['input_ids'])
+            input_ids2 = torch.tensor(encoded_dict2['input_ids'])
+            return input_ids1, input_ids2, y
 
 
 class FrozenData(Data):
@@ -80,12 +102,20 @@ class FrozenData(Data):
         self.dataset_test = FrozenDataset(encoding['test'])
 
     def custom_collate_fn(self, batch):
-        x1s, x2s, ys = zip(*batch)
-        return (pad_sequence(x1s, batch_first=True,  # B x T
-                             padding_value=self.padding_value),
-                pad_sequence(x2s, batch_first=True,  # B x T'
-                             padding_value=self.padding_value),
-                torch.cat(ys, dim=0))  # B
+        h1s, h2s, ys = zip(*batch)
+        H1 = pad_sequence(h1s, batch_first=True,  # B x T x d
+                          padding_value=self.padding_value)
+        H2 = pad_sequence(h2s, batch_first=True,  # B x T' x d
+                          padding_value=self.padding_value)
+        L1 = torch.LongTensor([len(h) for h in h1s])  # B
+        L2 = torch.LongTensor([len(h) for h in h2s])  # B
+        A1 = torch.zeros((H1.size(0), H1.size(1)))  # B x T
+        A2 = torch.zeros((H2.size(0), H2.size(1)))  # B x T'
+        for i in range(H1.size(0)):
+            A1[i][:L1[i]] = torch.ones(L1[i])
+            A2[i][:L2[i]] = torch.ones(L2[i])
+        Y = torch.cat(ys, dim=0)  # B
+        return H1, H2, L1, L2, A1, A2, Y
 
 
 class FrozenDataset(Dataset):
@@ -93,11 +123,14 @@ class FrozenDataset(Dataset):
         self.examples = examples
 
     def __len__(self):
-        return len(self.examples[0])
+        return len(self.examples)
 
     def __getitem__(self, index):
-        x1, x2, score = self.examples[index]
-        return torch.tensor(x1), torch.tensor(x2), torch.tensor([score])
+        h1, h2, score = self.examples[index]
+        h1 = torch.tensor(h1) # d x T
+        h2 = torch.tensor(h2) # d x T'
+        y = torch.tensor([score])
+        return h1, h2, y
 
 
 def read_sts_original_file(path):  # Ex. 'STS-B/original/sts-dev.tsv'

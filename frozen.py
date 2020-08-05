@@ -14,15 +14,18 @@ from data import FrozenData
 from pytorch_helper.model import Model
 from pytorch_helper.util import get_init_uniform
 from scipy.stats import pearsonr, spearmanr
+from util import masked_mean
 
 
 class FrozenModel(Model):
 
     def __init__(self, hparams):
         super().__init__(hparams=hparams)
+        self.padding_value = 0
 
     def load_data(self):
-        self.data = FrozenData(self.hparams.dump_path)
+        self.data = FrozenData(self.hparams.dump_path,
+                               padding_value=self.padding_value)
 
     def define_parameters(self):
         self.linear = nn.Sequential(nn.Dropout(self.hparams.drop),
@@ -32,11 +35,9 @@ class FrozenModel(Model):
         self.loss = torch.nn.MSELoss()
 
     def forward(self, batch):
-        X1 = batch[0].to(self.device)  # B x T x d
-        X2 = batch[1].to(self.device)  # B x T' x d
-        Y = batch[2].to(self.device)
-        embs1 = X1.mean(dim=1)  # B x d
-        embs2 = X2.mean(dim=1)  # B x d
+        H1, H2, L1, L2, A1, A2, Y = [tensor.to(self.device) for tensor in batch]
+        embs1 = masked_mean(H1, L1)  # B x d
+        embs2 = masked_mean(H2, L2)  # B x d
         preds = (self.linear(embs1) * embs2).sum(dim=1)
         loss = self.loss(preds, Y)
         return {'loss': loss, 'preds': preds.tolist(), 'golds': Y.tolist()}
@@ -63,7 +64,6 @@ class FrozenModel(Model):
     @staticmethod
     def get_hparams_grid():
         grid = OrderedDict({
-            'batch_size': [32],
             'lr': [5e-5, 4e-5, 3e-5, 2e-5],
             'drop': [0.5, 0.4, 0.3, 0.2, 0.1, 0.],
             'init': [0.5, 0.1, 0.05, 0.01, 0.],

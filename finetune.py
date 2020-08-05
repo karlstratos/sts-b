@@ -14,6 +14,7 @@ from data import STSData
 from transformers import BertTokenizer, BertModel, RobertaTokenizer, \
     RobertaModel, AlbertTokenizer, AlbertModel, DistilBertTokenizer, \
     DistilBertModel, ElectraTokenizer, ElectraModel
+from util import masked_mean
 
 
 class FineTuneModel(Model):
@@ -101,20 +102,22 @@ class FineTuneModel(Model):
         self.loss = torch.nn.MSELoss()
 
     def forward(self, batch):
+        batch = [tensor.to(self.device) for tensor in batch]
         if self.hparams.joint:
-            X = batch[0].to(self.device)
-            Y = batch[1].to(self.device)
-            embs = self.reduce_sequence(self.encoder(X))  # B x d
+            X, L, T, A, Y = batch
+            H = self.encoder(X, token_type_ids=T,  # B x T x d
+                             attention_mask=A)[0]
+            embs = self.reduce_sequence(H, L)  # B x d
             if self.hparams.use_projection:
                 preds = self.projector(embs).squeeze(1)  # B
             else:
                 preds = embs.mean(dim=1)  # B
         else:
-            X1 = batch[0].to(self.device)
-            X2 = batch[1].to(self.device)
-            Y = batch[2].to(self.device)
-            embs1 = self.reduce_sequence(self.encoder(X1))  # B x d
-            embs2 = self.reduce_sequence(self.encoder(X2))  # B x d
+            X1, X2, L1, L2, A1, A2, Y = batch
+            H1 = self.encoder(X1, attention_mask=A1)[0]  # B x T x d
+            H2 = self.encoder(X2, attention_mask=A2)[0]  # B x T' x d
+            embs1 = self.reduce_sequence(H1, L1)  # B x d
+            embs2 = self.reduce_sequence(H2, L2)  # B x d
             if self.hparams.use_projection:
                 embs = torch.cat([embs1, embs2, embs1 - embs2, embs1 * embs2],
                                  dim=1)  # B x 4d
@@ -127,15 +130,16 @@ class FineTuneModel(Model):
 
         return {'loss': loss, 'preds': preds.tolist(), 'golds': Y.tolist()}
 
-    def reduce_sequence(self, encoder_outputs):
-        hiddens = encoder_outputs[0]  # (B x T x d)
-        if self.hparams.combine == 'cls':  # [CLS] for BERT, <s> for RoBERTa
+
+    # TODO: I can just pass attention mask...
+    def reduce_sequence(self, hiddens, lengths):  # (B x T x d), (B)
+        if self.hparams.pooling == 'cls':  # [CLS] for BERT, <s> for RoBERTa
             embs = hiddens[:,0,:]  # (B x d)
-        elif self.hparams.combine == 'avg':
-            embs = hiddens.mean(dim=1)  # (B x d)
+        elif self.hparams.pooling == 'avg':
+            embs = masked_mean(hiddens, lengths) # (B x d)
         else:
             raise ValueError
-        return embs  # B x d
+        return embs
 
     def evaluate(self, loader_eval, loader_train=None):
         self.eval()
@@ -163,7 +167,7 @@ class FineTuneModel(Model):
             'lr': [5e-5, 4e-5, 3e-5, 2e-5],  # [*]
             'epochs': [4],  # [*]
             'joint': [True],
-            'combine': ['avg', 'cls'],
+            'pooling': ['avg', 'cls'],
             'use_projection': [True],
             'seed': list(range(100000)),
             })
@@ -186,9 +190,9 @@ class FineTuneModel(Model):
                             'specified [%(default)s]')
         parser.add_argument('--joint', action='store_true',
                             help='joint input?')
-        parser.add_argument('--combine', type=str, default='avg',
+        parser.add_argument('--pooling', type=str, default='avg',
                             choices=['avg', 'cls'],
-                            help='combine method [%(default)s]')
+                            help='pooling method [%(default)s]')
         parser.add_argument('--use_projection', action='store_true',
                             help='use projection?')
         parser.add_argument('--lr', type=float, default=3e-5,
@@ -217,19 +221,14 @@ class FineTuneModel(Model):
                 hiddens1 = []
                 hiddens2 = []
                 scores = []
-                for batch in loader:
-                    X1 = batch[0].to(self.device)
-                    X2 = batch[1].to(self.device)
-                    Y = batch[2].to(self.device)
-                    vectors1 = encoder(X1)[0].tolist()
-                    vectors2 = encoder(X2)[0].tolist()
+                for X1, X2, L1, L2, A1, A2, Y in loader:
+                    X1 = X1.to(self.device)
+                    X2 = X2.to(self.device)
+                    vectors1 = encoder(X1, attention_mask=A1)[0].tolist()
+                    vectors2 = encoder(X2, attention_mask=A2)[0].tolist()
                     for i in range(len(vectors1)):  # Skip padding!
-                        hiddens1.append(
-                            [vectors1[i][j] for j in range(len(vectors1[i]))
-                             if X1[i, j] != self.tokenizer.pad_token_id])
-                        hiddens2.append(
-                            [vectors2[i][j] for j in range(len(vectors2[i]))
-                             if X2[i, j] != self.tokenizer.pad_token_id])
+                        hiddens1.append(vectors1[i][:L1[i]])
+                        hiddens2.append(vectors2[i][:L2[i]])
                         scores.append(Y[i].item())
             return list(zip(hiddens1, hiddens2, scores))
 
