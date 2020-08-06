@@ -212,7 +212,7 @@ class FineTuneModel(Model):
         assert not self.hparams.joint  # Encode sentences separately.
         self.load_data()
         loader_train, loader_val, loader_test \
-            = self.data.get_loaders(self.hparams.test_batch_size,
+            = self.data.get_loaders(self.hparams.batch_size,
                                     shuffle_train=False,
                                     num_workers=self.hparams.num_workers,
                                     get_test=True)
@@ -226,12 +226,18 @@ class FineTuneModel(Model):
                     X2 = X2.to(self.device)
                     A1 = A1.to(self.device)
                     A2 = A2.to(self.device)
+
+                    # Concern: padding makes output values very slightly
+                    # different even with attention masking - probably due to
+                    # numerical precision.
                     vectors1 = encoder(X1, attention_mask=A1)[0].tolist()
                     vectors2 = encoder(X2, attention_mask=A2)[0].tolist()
+
                     for i in range(len(vectors1)):  # Skip padding!
                         hiddens1.append(vectors1[i][:L1[i]])
                         hiddens2.append(vectors2[i][:L2[i]])
                         scores.append(Y[i].item())
+
             return list(zip(hiddens1, hiddens2, scores))
 
         encoding = {'train': encode_data(loader_train),
