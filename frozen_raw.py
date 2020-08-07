@@ -4,8 +4,8 @@ import argparse
 import numpy as np
 import pickle
 
+from pytorch_helper.util import cos_numpy
 from scipy.stats import pearsonr, spearmanr
-from util import cos_numpy
 
 
 class RawFrozenEvaluator:
@@ -13,6 +13,7 @@ class RawFrozenEvaluator:
     def __init__(self, hparams):
         self.hparams = hparams
         self.encoding = pickle.load(open(hparams.dump_path, 'rb'))
+        self.dim = len(self.encoding['train'][0][0][0])
 
         if hparams.dim_pca > 0:
             self.get_val_projection()
@@ -100,6 +101,8 @@ if __name__ == '__main__':
     hparams = parser.parse_args()
 
     evaluator = RawFrozenEvaluator(hparams)
+    print('input embedding dimension %d' % evaluator.dim)
+
     run = evaluator.run()
     print('  train: {:4.1f}/{:4.1f} ({:d}/{:d} evaluated)'.format(
         run.p_train, run.s_train, run.num_preds_train,

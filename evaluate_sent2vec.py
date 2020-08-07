@@ -11,9 +11,9 @@ import re
 import sent2vec
 
 from nltk import TweetTokenizer, word_tokenize
+from pytorch_helper.util import cos_numpy
 from scipy.stats import pearsonr, spearmanr
-from sts_data import read_sts_original_file as read_sts
-from util import cos_numpy
+from data import read_sts_original_file as read_sts
 
 
 class Sent2vecEvaluator:

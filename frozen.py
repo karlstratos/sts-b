@@ -12,9 +12,8 @@ import torch.nn as nn
 from collections import OrderedDict
 from data import FrozenData
 from pytorch_helper.model import Model
-from pytorch_helper.util import get_init_uniform
+from pytorch_helper.util import get_init_uniform, masked_mean
 from scipy.stats import pearsonr, spearmanr
-from util import masked_mean
 
 
 class FrozenModel(Model):
@@ -29,16 +28,16 @@ class FrozenModel(Model):
 
     def define_parameters(self):
         self.linear = nn.Sequential(nn.Dropout(self.hparams.drop),
-                                    nn.Linear(self.data.dim_hidden,
-                                              self.data.dim_hidden))
+                                    nn.Linear(self.data.dim,
+                                              self.data.dim))
         self.apply(get_init_uniform(self.hparams.init))
         self.loss = torch.nn.MSELoss()
 
     def forward(self, batch):
         H1, H2, L1, L2, A1, A2, Y = [tensor.to(self.device) for tensor in batch]
-        embs1 = masked_mean(H1, L1)  # B x d
-        embs2 = masked_mean(H2, L2)  # B x d
-        preds = (self.linear(embs1) * embs2).sum(dim=1)
+        emb1s = masked_mean(H1, A1)  # B x d
+        emb2s = masked_mean(H2, A2)  # B x d
+        preds = (self.linear(emb1s) * emb2s).sum(dim=1)
         loss = self.loss(preds, Y)
         return {'loss': loss, 'preds': preds.tolist(), 'golds': Y.tolist()}
 

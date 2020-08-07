@@ -1,4 +1,23 @@
+import numpy as np
+import torch
 import torch.nn as nn
+
+
+def masked_mean(hiddens, mask):  # B x T x d, B x T
+    B, T, d = hiddens.size()
+    lengths = mask.sum(dim=1, keepdim=True)  # B x 1
+    mask = mask.unsqueeze(2).expand(B, T, d)
+    mean = (mask * hiddens).sum(dim=1).true_divide(lengths)
+    return mean  # B x T
+
+
+def get_length_mask(lengths, max_length=None):
+    if not max_length:
+        max_length = lengths.max().item()
+    indices = torch.arange(max_length).expand(len(lengths), -1)
+    lengths = lengths.unsqueeze(1).expand(len(lengths), max_length)
+    mask = indices < lengths
+    return mask  # B x T
 
 
 def get_init_uniform(init_value):
@@ -67,3 +86,7 @@ class FF(nn.Module):
         for layer in self.stack:
             x = x + layer(x) if self.residual_connection else layer(x)
         return self.out(x)
+
+
+def cos_numpy(u, v):
+    return np.dot(u, v) / np.linalg.norm(u) / np.linalg.norm(v)

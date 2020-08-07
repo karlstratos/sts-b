@@ -12,8 +12,8 @@ import pickle
 
 from collections import Counter
 from nltk import word_tokenize
+from pytorch_helper.util import cos_numpy
 from scipy.stats import pearsonr, spearmanr
-from util import cos_numpy
 
 
 class WordEmbeddingEvaluator:

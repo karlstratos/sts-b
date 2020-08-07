@@ -8,13 +8,12 @@ import torch.nn as nn
 from collections import OrderedDict
 from copy import deepcopy
 from pytorch_helper.model import Model
-from pytorch_helper.util import get_init_transformer
+from pytorch_helper.util import get_init_transformer, masked_mean
 from scipy.stats import pearsonr, spearmanr
 from data import STSData
 from transformers import BertTokenizer, BertModel, RobertaTokenizer, \
     RobertaModel, AlbertTokenizer, AlbertModel, DistilBertTokenizer, \
     DistilBertModel, ElectraTokenizer, ElectraModel
-from util import masked_mean
 
 
 class FineTuneModel(Model):
@@ -104,20 +103,20 @@ class FineTuneModel(Model):
     def forward(self, batch):
         batch = [tensor.to(self.device) for tensor in batch]
         if self.hparams.joint:
-            X, L, T, A, Y = batch
+            X, T, A, Y = batch
             H = self.encoder(X, token_type_ids=T,  # B x T x d
                              attention_mask=A)[0]
-            embs = self.reduce_sequence(H, L)  # B x d
+            embs = self.reduce_sequence(H, A)  # B x d
             if self.hparams.use_projection:
                 preds = self.projector(embs).squeeze(1)  # B
             else:
                 preds = embs.mean(dim=1)  # B
         else:
-            X1, X2, L1, L2, A1, A2, Y = batch
+            X1, X2, A1, A2, Y = batch
             H1 = self.encoder(X1, attention_mask=A1)[0]  # B x T x d
             H2 = self.encoder(X2, attention_mask=A2)[0]  # B x T' x d
-            embs1 = self.reduce_sequence(H1, L1)  # B x d
-            embs2 = self.reduce_sequence(H2, L2)  # B x d
+            embs1 = self.reduce_sequence(H1, A1)  # B x d
+            embs2 = self.reduce_sequence(H2, A2)  # B x d
             if self.hparams.use_projection:
                 embs = torch.cat([embs1, embs2, embs1 - embs2, embs1 * embs2],
                                  dim=1)  # B x 4d
@@ -131,12 +130,11 @@ class FineTuneModel(Model):
         return {'loss': loss, 'preds': preds.tolist(), 'golds': Y.tolist()}
 
 
-    # TODO: I can just pass attention mask...
-    def reduce_sequence(self, hiddens, lengths):  # (B x T x d), (B)
+    def reduce_sequence(self, hiddens, mask):  # B x T x d, B x T
         if self.hparams.pooling == 'cls':  # [CLS] for BERT, <s> for RoBERTa
-            embs = hiddens[:,0,:]  # (B x d)
+            embs = hiddens[:,0,:]  # B x d
         elif self.hparams.pooling == 'avg':
-            embs = masked_mean(hiddens, lengths) # (B x d)
+            embs = masked_mean(hiddens, mask) # B x d
         else:
             raise ValueError
         return embs
@@ -221,11 +219,13 @@ class FineTuneModel(Model):
                 hiddens1 = []
                 hiddens2 = []
                 scores = []
-                for X1, X2, L1, L2, A1, A2, Y in loader:
-                    X1 = X1.to(self.device)
-                    X2 = X2.to(self.device)
-                    A1 = A1.to(self.device)
-                    A2 = A2.to(self.device)
+                for X1, X2, A1, A2, Y in loader:
+                    X1 = X1.to(self.device)  # (B x T x d)
+                    X2 = X2.to(self.device)  # (B x T' x d)
+                    A1 = A1.to(self.device)  # (B x T)
+                    A2 = A2.to(self.device)  # (B x T')
+                    L1 = A1.sum(dim=1)  # (B)
+                    L2 = A2.sum(dim=1)  # (B)
 
                     # Concern: padding makes output values very slightly
                     # different even with attention masking - probably due to
