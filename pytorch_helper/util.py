@@ -34,7 +34,8 @@ def masked_mean(hiddens, mask):  # B x T x d, B x T
 def get_length_mask(lengths, max_length=None, flip=False):
     if not max_length:
         max_length = lengths.max().item()
-    indices = torch.arange(max_length).expand(len(lengths), -1)
+    indices = torch.arange(max_length).expand(len(lengths),
+                                              -1).to(lengths.device)
     lengths = lengths.unsqueeze(1).expand(len(lengths), max_length)
     mask = indices < lengths if not flip else indices >= lengths
     return mask  # B x T
