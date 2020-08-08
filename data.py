@@ -86,17 +86,21 @@ class FrozenData(Data):
         self.dataset_test = FrozenDataset(encoding['test'])
 
     def custom_collate_fn(self, batch):
-        emb_list1s, emb_list2s, scores = zip(*batch)
+        vector_sequences1, vector_sequences2, scores = zip(*batch)
         scores = torch.tensor(scores)
-        H1 = pad_sequence(emb_list1s, batch_first=True,  # B x T x d
-                          padding_value=self.padding_value)
-        H2 = pad_sequence(emb_list2s, batch_first=True,  # B x T' x d
-                          padding_value=self.padding_value)
-        L1 = torch.LongTensor([len(h) for h in emb_list1s])  # B
-        L2 = torch.LongTensor([len(h) for h in emb_list2s])  # B
-        A1 = get_length_mask(L1)  # B x T
-        A2 = get_length_mask(L2)  # B x T'
-        return H1, H2, L1, L2, A1, A2, scores
+
+        padded_vector_sequences1 = pad_sequence(  # B x T x d
+            vector_sequences1, batch_first=True,
+            padding_value=self.padding_value)
+        padded_vector_sequences2 = pad_sequence(  # B x T' x d
+            vector_sequences2, batch_first=True,
+            padding_value=self.padding_value)
+
+        lengths1 = torch.LongTensor([len(v) for v in vector_sequences1])  # B
+        lengths2 = torch.LongTensor([len(v) for v in vector_sequences2])  # B
+
+        return padded_vector_sequences1, padded_vector_sequences2, lengths1, \
+            lengths2, scores
 
 
 class FrozenDataset(Dataset):

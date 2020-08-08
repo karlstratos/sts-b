@@ -3,7 +3,27 @@ import torch
 import torch.nn as nn
 
 
+def masked_max_from_lengths(hiddens, lengths):  # B x T x d, B
+    mask = get_length_mask(lengths, flip=True)
+    return masked_max(hiddens, mask)
+
+
+def masked_mean_from_lengths(hiddens, lengths):  # B x T x d, B
+    mask = get_length_mask(lengths)
+    return masked_mean(hiddens, mask)
+
+
+def masked_max(hiddens, mask):  # B x T x d, B x T
+    """mask[i][t] = 1 iff the token is to be IGNORED"""
+    B, T, d = hiddens.size()
+    mask = mask.unsqueeze(2).expand(B, T, d)
+    hiddens = hiddens.float().masked_fill_(mask, float('-inf'))
+    pooled, indices = hiddens.max(dim=1)
+    return pooled, indices  # B x d, B x d
+
+
 def masked_mean(hiddens, mask):  # B x T x d, B x T
+    """mask[i][t] = 1 iff the token is to be INCLUDED"""
     B, T, d = hiddens.size()
     lengths = mask.sum(dim=1, keepdim=True)  # B x 1
     mask = mask.unsqueeze(2).expand(B, T, d)
@@ -11,12 +31,12 @@ def masked_mean(hiddens, mask):  # B x T x d, B x T
     return mean  # B x T
 
 
-def get_length_mask(lengths, max_length=None):
+def get_length_mask(lengths, max_length=None, flip=False):
     if not max_length:
         max_length = lengths.max().item()
     indices = torch.arange(max_length).expand(len(lengths), -1)
     lengths = lengths.unsqueeze(1).expand(len(lengths), max_length)
-    mask = indices < lengths
+    mask = indices < lengths if not flip else indices >= lengths
     return mask  # B x T
 
 
@@ -26,7 +46,8 @@ def get_init_uniform(init_value):
         if init_value > 0.:  # If 0 use default initialization
             if hasattr(m, 'weight'):
                 m.weight.data.uniform_(-init_value, init_value)
-            if hasattr(m, 'bias'):
+            if hasattr(m, 'bias') \
+               and hasattr(m.bias, 'data'):  # "bias" can also be boolean...
                 m.bias.data.fill_(0.)
 
     return init_uniform
@@ -78,6 +99,9 @@ class FF(nn.Module):
                 layer.append(nn.Dropout(dropout_rate))
 
             self.stack.append(nn.Sequential(*layer))
+
+        if num_layers == 0 and dropout_rate > 0:  # Do dropout in linear
+            self.stack.append(nn.Dropout(dropout_rate))
 
         self.out = nn.Linear(dim_input if num_layers < 1 else dim_hidden,
                              dim_output)
