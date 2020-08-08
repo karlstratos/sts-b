@@ -1,6 +1,5 @@
-# python frozen.py --train --dump_path scratch/dump
-# python frozen.py --train --model_path scratch/frozen_bert --dump_path scratch/dump_bert --num_runs 100  --gpus 6 --num_workers 8
-# python frozen.py --train --model_path scratch/frozen_roberta --dump_path scratch/dump_roberta --num_runs 100  --gpus 7 --num_workers 8
+# python frozen.py --model_path scratch/frozen_bert --train --dump_path scratch/dump_bert --verbose --num_runs 100 --num_workers 4 --gpus 4
+# python frozen.py --model_path scratch/frozen_glove --train --dump_path scratch/dump_word_embeddings_glove --verbose --num_runs 100 --num_workers 4 --gpus 5
 
 import argparse
 import copy
