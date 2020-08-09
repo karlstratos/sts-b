@@ -160,10 +160,11 @@ class FineTuneModel(Model):
 
     @staticmethod
     def get_hparams_grid():
-        # [*] mostly following https://arxiv.org/pdf/1810.04805.pdf
         grid = OrderedDict({
-            'lr': [5e-5, 4e-5, 3e-5, 2e-5],  # [*]
-            'epochs': [4],  # [*]
+            'batch_size' : [32],
+            'lr': [5e-5, 4e-5, 3e-5, 2e-5],
+            'epochs': [10],
+            'drop' : [0.2, 0.1],
             'joint': [True],
             'pooling': ['avg', 'cls'],
             'use_projection': [True],

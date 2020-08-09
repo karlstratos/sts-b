@@ -102,6 +102,7 @@ class FrozenModel(Model):
             'batch_size': [16, 32, 64, 128],
             'seed': list(range(100000)),
             'verbose': [True],
+            'load_data_once': [True],  # Warning: no special data preprocessing
             })
         return grid
 
