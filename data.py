@@ -64,7 +64,8 @@ def read_sts_original_file(path):  # Ex. 'STS-B/original/sts-dev.tsv'
             pieces = line.split('\t')
             sent1 = pieces[5].strip()
             sent2 = pieces[6].strip()
-            score = float(pieces[4])
+            score = float(pieces[4]) / 5.  # Normalize scores
+            assert score >= 0. and score <= 1.
             examples.append((sent1, sent2, score))
     return examples
 

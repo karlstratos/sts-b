@@ -11,7 +11,7 @@ import os
 import pickle
 
 from collections import Counter
-from nltk import word_tokenize
+from nltk import word_tokenize  # Warning: assume same tokenization for wembs
 from pytorch_helper.util import cos_numpy
 from scipy.stats import pearsonr, spearmanr
 
@@ -168,7 +168,8 @@ class WordEmbeddingEvaluator:
                     if self.hparams.lowercase:
                         toks1 = [tok.lower() for tok in toks1]
                         toks2 = [tok.lower() for tok in toks2]
-                    score = float(pieces[4])
+                    score = float(pieces[4]) / 5.  # Normalize scores
+                    assert score >= 0. and score <= 1.
                     examples.append((toks1, toks2, score))
                     self.vocab.update(toks1)
                     self.vocab.update(toks2)
