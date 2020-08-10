@@ -92,12 +92,18 @@ class Model(nn.Module):
             self = self.module  # TODO: doesn't work, figure out
         self.to(self.device)
 
-        gradient_clippers = self.configure_gradient_clippers()
-        optimizers, schedulers = self.configure_optimizers()
-
         loader_train, loader_val, _ = self.data.get_loaders(
             self.hparams.batch_size, shuffle_train=True,
             num_workers=self.hparams.num_workers, get_test=False)
+        self.num_train_steps = self.get_num_train_steps(
+            len(self.data.dataset_train))
+
+        gradient_clippers = self.configure_gradient_clippers()
+        optimizers, schedulers = self.configure_optimizers()
+        logger.log('%d training steps' % self.num_train_steps)
+        if hasattr(self, 'num_warmup_steps'):
+            logger.log('%d warmup steps' % self.num_warmup_steps)
+
         best_val_perf = float('-inf')
         best_state_dict = None
         num_steps = 0
@@ -116,7 +122,6 @@ class Model(nn.Module):
                         forward_sum[key] = value
 
         self.zero_grad()
-        num_train_steps = self.get_num_train_steps(len(loader_train))
         try:
             for epoch in range(1, self.hparams.epochs + 1):
                 for batch_num, batch in enumerate(loader_train):
@@ -141,12 +146,15 @@ class Model(nn.Module):
                             scheduler.step()
                         self.zero_grad()
 
-                    # TODO: not printing right
                     if (num_steps + 1) % self.hparams.check_interval == 0:
+                        lrs = ' '.join(['{:1.7f}'.format(
+                            scheduler.get_last_lr()[0])
+                                        for scheduler in schedulers])
                         logger.log('Step {:10d}/{:d} | Epoch {:3d} | '
-                                   'batch {:5d}/{:5d}'\
-                                   .format(num_steps, num_train_steps, epoch,
-                                           batch_num + 1, len(loader_train)),
+                                   'lrs {:s} | batch {:5d}/{:5d}'\
+                                   .format(num_steps, self.num_train_steps,
+                                           epoch, lrs, batch_num + 1,
+                                           len(loader_train)),
                                    False)
                         logger.log(' '.join([' | {:s} {:8.1f}'.format(
                             key, forward_sum[key] / num_steps)
@@ -157,7 +165,10 @@ class Model(nn.Module):
                     break
 
                 val_perf = self.evaluate(loader_val)
+                lrs = ' '.join(['{:1.7f}'.format(scheduler.get_last_lr()[0])
+                                for scheduler in schedulers])
                 logger.log('End of epoch {:3d}'.format(epoch), False)
+                logger.log(' | lrs {:s}'.format(lrs), False)
                 logger.log(' '.join([' | {:s} {:8.1f}'.format(
                     key, forward_sum[key] / num_steps)
                                      for key in forward_sum]), False)

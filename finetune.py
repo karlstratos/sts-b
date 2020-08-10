@@ -14,6 +14,8 @@ from data import STSData
 from transformers import BertTokenizer, BertModel, RobertaTokenizer, \
     RobertaModel, AlbertTokenizer, AlbertModel, DistilBertTokenizer, \
     DistilBertModel, ElectraTokenizer, ElectraModel
+from transformers import AdamW, get_constant_schedule, \
+    get_linear_schedule_with_warmup
 
 
 class FineTuneModel(Model):
@@ -155,8 +157,33 @@ class FineTuneModel(Model):
     def configure_gradient_clippers(self):
         return [(self.parameters(), self.hparams.clip)]
 
-    def configure_optimizers(self):  # TODO: Adam + weight decay + scheduler?
-        return [torch.optim.Adam(self.parameters(), lr=self.hparams.lr)], []
+    def configure_optimizers(self):
+        if self.hparams.optimize == 'basic':
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+            scheduler = get_constant_schedule(optimizer)
+
+        elif self.hparams.optimize == 'bert':
+            # Copied from: https://huggingface.co/transformers/training.html
+            no_decay = ['bias', 'LayerNorm.weight']
+            optimizer_grouped_parameters = [
+                {'params': [p for n, p in self.named_parameters()
+                            if not any(nd in n for nd in no_decay)],
+                 'weight_decay': self.hparams.weight_decay},
+                {'params': [p for n, p in self.named_parameters()
+                            if any(nd in n for nd in no_decay)],
+                 'weight_decay': 0.}
+            ]
+            optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.lr)
+
+            self.num_warmup_steps = int(self.num_train_steps *
+                                        self.hparams.warmup_proportion)
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_train_steps)
+        else:
+            raise ValueError
+
+        return [optimizer], [scheduler]
 
     @staticmethod
     def get_hparams_grid():
@@ -187,6 +214,14 @@ class FineTuneModel(Model):
         parser.add_argument('--dump_path', type=str, default='',
                             help='dump encoder output here and exit if '
                             'specified [%(default)s]')
+        parser.add_argument('--optimize', type=str, default='basic',
+                            choices=['basic', 'bert'],
+                            help='optimization scheme [%(default)s]')
+        parser.add_argument('--warmup_proportion', type=float, default=0.06,
+                            help='proportion of training steps to perform '
+                            'linear learning rate warmup for [%(default)g]')
+        parser.add_argument('--weight_decay', type=float, default=0.01,
+                            help='weight decay [%(default)g]')
         parser.add_argument('--joint', action='store_true',
                             help='joint input?')
         parser.add_argument('--pooling', type=str, default='avg',
