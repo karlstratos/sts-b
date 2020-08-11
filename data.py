@@ -27,6 +27,7 @@ class STSData(Data):
                                                     'original/sts-test.tsv'))
 
     def custom_collate_fn(self, batch):
+        # https://huggingface.co/transformers/preprocessing.html
         sent1s, sent2s, scores = zip(*batch)
         scores = torch.tensor(scores)
         if self.joint:

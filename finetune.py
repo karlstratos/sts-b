@@ -243,7 +243,6 @@ class FineTuneModel(Model):
         encoder = self.get_encoder()
         encoder.to(self.device)
 
-        assert not self.hparams.joint  # Encode sentences separately.
         self.load_data()
         loader_train, loader_val, loader_test \
             = self.data.get_loaders(self.hparams.batch_size,
@@ -255,24 +254,29 @@ class FineTuneModel(Model):
                 hiddens1 = []
                 hiddens2 = []
                 scores = []
-                for X1, X2, A1, A2, Y in loader:
-                    X1 = X1.to(self.device)  # (B x T x d)
-                    X2 = X2.to(self.device)  # (B x T' x d)
-                    A1 = A1.to(self.device)  # (B x T)
-                    A2 = A2.to(self.device)  # (B x T')
-                    L1 = A1.sum(dim=1)  # (B)
-                    L2 = A2.sum(dim=1)  # (B)
-
-                    # Concern: padding makes output values very slightly
-                    # different even with attention masking - probably due to
-                    # numerical precision.
-                    vectors1 = encoder(X1, attention_mask=A1)[0].tolist()
-                    vectors2 = encoder(X2, attention_mask=A2)[0].tolist()
-
-                    for i in range(len(vectors1)):  # Skip padding!
-                        hiddens1.append(vectors1[i][:L1[i]])
-                        hiddens2.append(vectors2[i][:L2[i]])
-                        scores.append(Y[i].item())
+                for batch in loader:
+                    batch = [tensor.to(self.device) for tensor in batch]
+                    if self.hparams.joint:
+                        X, T, A, Y = batch
+                        vectors = encoder(X, token_type_ids=T,
+                                          attention_mask=A)[0].tolist()
+                        L = A.sum(dim=1)
+                        for i in range(len(vectors)):
+                            sep = (X[i] == self.tokenizer.sep_token_id).\
+                                  nonzero()[0].item()  # First [SEP] or </s>
+                            hiddens1.append(vectors[i][:sep + 1])
+                            hiddens2.append(vectors[i][sep + 1:L[i]])
+                            scores.append(Y[i].item())
+                    else:
+                        X1, X2, A1, A2, Y = batch
+                        vectors1 = encoder(X1, attention_mask=A1)[0].tolist()
+                        vectors2 = encoder(X2, attention_mask=A2)[0].tolist()
+                        L1 = A1.sum(dim=1)
+                        L2 = A2.sum(dim=1)
+                        for i in range(len(vectors1)):
+                            hiddens1.append(vectors1[i][:L1[i]])
+                            hiddens2.append(vectors2[i][:L2[i]])
+                            scores.append(Y[i].item())
 
             return list(zip(hiddens1, hiddens2, scores))
 
