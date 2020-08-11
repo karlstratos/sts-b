@@ -41,7 +41,7 @@ class Model(nn.Module):
         best_val_perf = float('-inf')
         start = timer()
         random.seed(self.hparams.seed)  # For reproducible random runs
-        if self.hparams.load_data_once:
+        if not self.hparams.reload_data:
             self.load_data()  # Warning: this doesn't allow varying data hypers
 
         for run_num in range(1, self.hparams.num_runs + 1):
@@ -77,7 +77,7 @@ class Model(nn.Module):
         random.seed(self.hparams.seed)
         torch.manual_seed(self.hparams.seed)
 
-        if not self.hparams.load_data_once:
+        if self.hparams.reload_data:
             self.load_data()
         self.define_parameters()
         if self.hparams.verbose:
@@ -282,8 +282,8 @@ class Model(nn.Module):
                             help='num dataloader workers [%(default)d]')
         parser.add_argument('--verbose', action='store_true',
                             help='verbose output?')
-        parser.add_argument('--load_data_once', action='store_true',
-                            help='load data once for training?')
+        parser.add_argument('--reload_data', action='store_true',
+                            help='reload data for each training session?')
         parser.add_argument('--seed', type=int, default=42,
                             help='random seed [%(default)d]')
         parser.add_argument('--gpu', default='', type=str,

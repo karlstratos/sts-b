@@ -11,11 +11,11 @@ from torch.utils.data import Dataset, TensorDataset
 
 class STSData(Data):
 
-    def __init__(self, sts_path, tokenizer, joint):
+    def __init__(self, sts_path, tokenizer, disjoint):
         super().__init__()
         self.sts_path = sts_path
         self.tokenizer = tokenizer
-        self.joint = joint
+        self.disjoint = disjoint
         self.load_datasets()
 
     def load_datasets(self):
@@ -30,19 +30,19 @@ class STSData(Data):
         # https://huggingface.co/transformers/preprocessing.html
         sent1s, sent2s, scores = zip(*batch)
         scores = torch.tensor(scores)
-        if self.joint:
-            encoded = self.tokenizer(sent1s, sent2s, padding=True,
-                                     return_tensors='pt',
-                                     return_token_type_ids=True)
-            return encoded['input_ids'], encoded['token_type_ids'], \
-                encoded['attention_mask'], scores
-        else:
+        if self.disjoint:
             encoded1 = self.tokenizer(sent1s, padding=True,
                                       return_tensors='pt')
             encoded2 = self.tokenizer(sent2s, padding=True,
                                       return_tensors='pt')
             return encoded1['input_ids'], encoded2['input_ids'], \
                 encoded1['attention_mask'], encoded2['attention_mask'], scores
+        else:
+            encoded = self.tokenizer(sent1s, sent2s, padding=True,
+                                     return_tensors='pt',
+                                     return_token_type_ids=True)
+            return encoded['input_ids'], encoded['token_type_ids'], \
+                encoded['attention_mask'], scores
 
 
 class STSDataset(Dataset):
@@ -55,7 +55,6 @@ class STSDataset(Dataset):
 
     def __getitem__(self, index):
         return self.examples[index]
-
 
 
 def read_sts_original_file(path):  # Ex. 'STS-B/original/sts-dev.tsv'

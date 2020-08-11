@@ -25,8 +25,11 @@ class FineTuneModel(Model):
 
     def load_data(self):
         self.tokenizer = self.get_tokenizer()
+
+        # Warning: if you vary 'disjoint' in grid search you must use
+        # 'reload_data' to correctly use differently configured datasets.
         self.data = STSData(self.hparams.data_path, self.tokenizer,
-                            self.hparams.joint)
+                            self.hparams.disjoint)
 
     def get_tokenizer(self):
         if self.hparams.model_type == 'bert':
@@ -87,45 +90,45 @@ class FineTuneModel(Model):
         self.encoder = self.get_encoder()
         self.dim_hidden = self.encoder.config.hidden_size
 
-        if self.hparams.joint:  # Full transformer
-            if self.hparams.use_projection:  # [x1|x2] -> score
-                self.projector = nn.Sequential(nn.Dropout(self.hparams.drop),
-                                               nn.Linear(self.dim_hidden, 1))
-                self.projector.apply(get_init_transformer(self.encoder))
-        else:  # Dual encoder
+        if self.hparams.disjoint:  # Dual encoder
             self.encoder2 = deepcopy(self.encoder)
-            if self.hparams.use_projection:  # [x1,x2,x1-x2,x1*x2] -> score
-                self.projector = nn.Sequential(
+            if not self.hparams.raw:  # [x1,x2,x1-x2,x1*x2] -> score
+                self.scorer = nn.Sequential(
                     nn.Dropout(self.hparams.drop),
                     nn.Linear(4 * self.dim_hidden, 1))
-                self.projector.apply(get_init_transformer(self.encoder))
+                self.scorer.apply(get_init_transformer(self.encoder))
+        else:  # Full transformer
+            if not self.hparams.raw:  # [x1|x2] -> score
+                self.scorer = nn.Sequential(nn.Dropout(self.hparams.drop),
+                                               nn.Linear(self.dim_hidden, 1))
+                self.scorer.apply(get_init_transformer(self.encoder))
 
         self.loss = torch.nn.MSELoss()
 
     def forward(self, batch):
         batch = [tensor.to(self.device) for tensor in batch]
-        if self.hparams.joint:
-            X, T, A, Y = batch
-            H = self.encoder(X, token_type_ids=T,  # B x T x d
-                             attention_mask=A)[0]
-            embs = self.reduce_sequence(H, A)  # B x d
-            if self.hparams.use_projection:
-                preds = self.projector(embs).squeeze(1)  # B
-            else:
-                preds = embs.mean(dim=1)  # B
-        else:
+        if self.hparams.disjoint:
             X1, X2, A1, A2, Y = batch
             H1 = self.encoder(X1, attention_mask=A1)[0]  # B x T x d
             H2 = self.encoder(X2, attention_mask=A2)[0]  # B x T' x d
             embs1 = self.reduce_sequence(H1, A1)  # B x d
             embs2 = self.reduce_sequence(H2, A2)  # B x d
-            if self.hparams.use_projection:
-                embs = torch.cat([embs1, embs2, embs1 - embs2, embs1 * embs2],
-                                 dim=1)  # B x 4d
-                preds = self.projector(embs).squeeze(1)  # B
-            else:  # Scaled dot product
+            if self.hparams.raw:  # Scaled dot product
                 scaling = math.sqrt(self.dim_hidden)
                 preds = (embs1 * embs2).sum(dim=1).div(scaling)  # B
+            else:
+                embs = torch.cat([embs1, embs2, embs1 - embs2, embs1 * embs2],
+                                 dim=1)  # B x 4d
+                preds = self.scorer(embs).squeeze(1)  # B
+        else:
+            X, T, A, Y = batch
+            H = self.encoder(X, token_type_ids=T,  # B x T x d
+                             attention_mask=A)[0]
+            embs = self.reduce_sequence(H, A)  # B x d
+            if self.hparams.raw:
+                preds = embs.mean(dim=1)  # B
+            else:
+                preds = self.scorer(embs).squeeze(1)  # B
 
         loss = self.loss(preds, Y)
 
@@ -188,13 +191,11 @@ class FineTuneModel(Model):
     @staticmethod
     def get_hparams_grid():
         grid = OrderedDict({
-            'batch_size' : [32],
+            'batch_size' : [16, 32],
             'lr': [5e-5, 4e-5, 3e-5, 2e-5],
             'epochs': [10],
             'drop' : [0.2, 0.1],
-            'joint': [True],
-            'pooling': ['avg', 'cls'],
-            'use_projection': [True],
+            'pooling': ['cls'],
             'seed': list(range(100000)),
             })
         return grid
@@ -202,6 +203,12 @@ class FineTuneModel(Model):
     @staticmethod
     def get_model_specific_argparser():
         parser = Model.get_general_argparser()
+
+        for action in parser._actions:
+            if action.dest == 'batch_size':
+                action.default = 32
+            elif action.dest == 'epochs':
+                action.default = 10
 
         parser.add_argument('--data_path', type=str, default='STS-B',
                             help='path to STS-B folder from GLUE [%(default)s]')
@@ -222,14 +229,14 @@ class FineTuneModel(Model):
                             'linear learning rate warmup for [%(default)g]')
         parser.add_argument('--weight_decay', type=float, default=0.01,
                             help='weight decay [%(default)g]')
-        parser.add_argument('--joint', action='store_true',
-                            help='joint input?')
+        parser.add_argument('--disjoint', action='store_true',
+                            help='disjoint input?')
         parser.add_argument('--pooling', type=str, default='cls',
                             choices=['avg', 'cls'],
                             help='pooling method [%(default)s]')
-        parser.add_argument('--use_projection', action='store_true',
-                            help='use projection?')
-        parser.add_argument('--lr', type=float, default=3e-5,
+        parser.add_argument('--raw', action='store_true',
+                            help='get scores without additional parameters?')
+        parser.add_argument('--lr', type=float, default=5e-5,
                             help='initial learning rate [%(default)g]')
         parser.add_argument('--drop', type=float, default=0.1,
                             help='dropout rate [%(default)g]')
@@ -256,7 +263,17 @@ class FineTuneModel(Model):
                 scores = []
                 for batch in loader:
                     batch = [tensor.to(self.device) for tensor in batch]
-                    if self.hparams.joint:
+                    if self.hparams.disjoint:
+                        X1, X2, A1, A2, Y = batch
+                        vectors1 = encoder(X1, attention_mask=A1)[0].tolist()
+                        vectors2 = encoder(X2, attention_mask=A2)[0].tolist()
+                        L1 = A1.sum(dim=1)
+                        L2 = A2.sum(dim=1)
+                        for i in range(len(vectors1)):
+                            hiddens1.append(vectors1[i][:L1[i]])
+                            hiddens2.append(vectors2[i][:L2[i]])
+                            scores.append(Y[i].item())
+                    else:
                         X, T, A, Y = batch
                         vectors = encoder(X, token_type_ids=T,
                                           attention_mask=A)[0].tolist()
@@ -266,16 +283,6 @@ class FineTuneModel(Model):
                                   nonzero()[0].item()  # First [SEP] or </s>
                             hiddens1.append(vectors[i][:sep + 1])
                             hiddens2.append(vectors[i][sep + 1:L[i]])
-                            scores.append(Y[i].item())
-                    else:
-                        X1, X2, A1, A2, Y = batch
-                        vectors1 = encoder(X1, attention_mask=A1)[0].tolist()
-                        vectors2 = encoder(X2, attention_mask=A2)[0].tolist()
-                        L1 = A1.sum(dim=1)
-                        L2 = A2.sum(dim=1)
-                        for i in range(len(vectors1)):
-                            hiddens1.append(vectors1[i][:L1[i]])
-                            hiddens2.append(vectors2[i][:L2[i]])
                             scores.append(Y[i].item())
 
             return list(zip(hiddens1, hiddens2, scores))

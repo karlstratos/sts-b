@@ -109,11 +109,6 @@ class FrozenModel(Model):
     def get_model_specific_argparser():
         parser = Model.get_general_argparser()
 
-        # TODO: clean up default behaviors....
-        for action in parser._actions:
-            if action.dest == 'load_data_once':
-                action.default = True  # Warning: no special data preprocessing
-
         parser.add_argument('--dump_path', type=str, default='scratch/dump',
                             help='path to encoding dump [%(default)s]')
         parser.add_argument('--dim_lstm', type=int, default=100,
