@@ -50,7 +50,7 @@ class Model(nn.Module):
 
             if val_perf > best_val_perf:
                 best_val_perf = val_perf
-                logger.log('----New best {:8.2f}, saving'.format(val_perf))
+                logger.log('----New best {:8.1f}, saving'.format(val_perf))
                 torch.save({'hparams': self.hparams,
                             'state_dict': state_dict}, self.hparams.model_path)
 
