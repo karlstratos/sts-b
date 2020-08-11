@@ -1,3 +1,7 @@
+# python finetune.py --dump_path scratch/dump_bert --model_type bert --batch_size 256 --gpu 0
+# python finetune.py --model_path scratch/finetune_bert-large_best --train --model_type bert-large --seed 45847 --optimize bert --lr 5e-05 --num_workers 4 --gpu 2
+# python finetune.py --train --model_path scratch/finetune_bert --model_type bert --optimize bert --num_runs 100 --gpu 1
+
 import argparse
 import math
 import os
