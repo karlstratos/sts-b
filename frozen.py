@@ -1,5 +1,5 @@
-# python frozen.py --model_path scratch/frozen_bert --train --dump_path scratch/dump_bert --verbose --num_runs 100 --num_workers 4 --gpus 4
-# python frozen.py --model_path scratch/frozen_glove --train --dump_path scratch/dump_word_embeddings_glove --verbose --num_runs 100 --num_workers 4 --gpus 5
+# python frozen.py --model_path scratch/frozen_bert --train --dump_path scratch/dump_bert --verbose --num_runs 100 --num_workers 4 --gpu 4
+# python frozen.py --model_path scratch/frozen_glove --train --dump_path scratch/dump_word_embeddings_glove --verbose --num_runs 100 --num_workers 4 --gpu 5
 
 import argparse
 import copy
@@ -144,7 +144,7 @@ if __name__ == '__main__':
     hparams = parser.parse_args()
 
     # Set environment variables before all else.
-    os.environ['CUDA_VISIBLE_DEVICES'] = hparams.gpus
+    os.environ['CUDA_VISIBLE_DEVICES'] = hparams.gpu
 
     model = FrozenModel(hparams)
     if hparams.train:

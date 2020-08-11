@@ -224,7 +224,7 @@ class FineTuneModel(Model):
                             help='weight decay [%(default)g]')
         parser.add_argument('--joint', action='store_true',
                             help='joint input?')
-        parser.add_argument('--pooling', type=str, default='avg',
+        parser.add_argument('--pooling', type=str, default='cls',
                             choices=['avg', 'cls'],
                             help='pooling method [%(default)s]')
         parser.add_argument('--use_projection', action='store_true',
@@ -291,7 +291,7 @@ if __name__ == '__main__':
     hparams = parser.parse_args()
 
     # Set environment variables before all else.
-    os.environ['CUDA_VISIBLE_DEVICES'] = hparams.gpus
+    os.environ['CUDA_VISIBLE_DEVICES'] = hparams.gpu
 
     model = FineTuneModel(hparams)
     if hparams.dump_path:

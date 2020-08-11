@@ -15,7 +15,7 @@ class Model(nn.Module):
     def __init__(self, hparams):
         super().__init__()
         self.hparams = hparams
-        self.device = torch.device('cuda' if hparams.gpus else 'cpu')
+        self.device = torch.device('cuda' if hparams.gpu else 'cpu')
 
     def load_data(self):
         raise NotImplementedError
@@ -85,12 +85,15 @@ class Model(nn.Module):
         logger.log('%d params' % sum([p.numel() for p in self.parameters()]))
         logger.log('hparams: %s' % self.flag_hparams())
 
-        if torch.cuda.device_count() > 1:
-            logger.log('Data parallel across %d GPUs: %s' %
-                       (len(self.hparams.gpus.split(',')), self.hparams.gpus))
-            self = nn.DataParallel(self)
-            self = self.module  # TODO: doesn't work, figure out
-        self.to(self.device)
+        # _______________________NOTE FOR FUTURE________________________________
+        # We cannot easily apply data parallelism (DP) here because 'self'
+        # confounds DP functions ('forward', 'parameters', ...) with non-DP
+        # attributes ('device', 'hparams', ...) which cannot be accessed
+        # directly once the module is wrapped up in DP. In the future, separate
+        # DP from non-DP in the model to support DP. Better yet, use DDP:
+        #   https://pytorch.org/docs/master/notes/cuda.html#cuda-nn-ddp-instead
+        #_______________________________________________________________________
+        self.to(self.device)  # Single-GPU only
 
         loader_train, loader_val, _ = self.data.get_loaders(
             self.hparams.batch_size, shuffle_train=True,
@@ -132,7 +135,6 @@ class Model(nn.Module):
                         break
 
                     loss = forward['loss']
-                    loss = loss.mean()  # Needed in case of dataparallel
                     loss.backward()  # Accumulating gradients on this batch
 
                     if (batch_num + 1) % \
@@ -221,11 +223,11 @@ class Model(nn.Module):
         return val_perf, test_perf
 
     def load(self):
-        checkpoint = torch.load(self.hparams.model_path) if self.hparams.gpus \
+        checkpoint = torch.load(self.hparams.model_path) if self.hparams.gpu \
                      else torch.load(self.hparams.model_path,
                                      map_location=torch.device('cpu'))
-        if checkpoint['hparams'].gpus and not self.hparams.gpus:
-            checkpoint['hparams'].gpus = ''
+        if checkpoint['hparams'].gpu and not self.hparams.gpu:
+            checkpoint['hparams'].gpu = ''
         self.hparams = checkpoint['hparams']
         self.define_parameters()
         self.load_state_dict(checkpoint['state_dict'])
@@ -248,7 +250,7 @@ class Model(nn.Module):
                 continue
             elif str(val) == 'True':
                 flags += ' --%s' % (hparam)
-            elif str(hparam) in {'model_path', 'num_runs', 'gpus'}:
+            elif str(hparam) in {'model_path', 'num_runs', 'gpu'}:
                 continue
             else:
                 flags += ' --%s %s' % (hparam, val)
@@ -284,7 +286,7 @@ class Model(nn.Module):
                             help='load data once for training?')
         parser.add_argument('--seed', type=int, default=42,
                             help='random seed [%(default)d]')
-        parser.add_argument('--gpus', default='', type=str,
-                            help='GPUs separated by comma [%(default)s]')
+        parser.add_argument('--gpu', default='', type=str,
+                            help='GPU number (no GPU if empty) [%(default)s]')
 
         return parser
